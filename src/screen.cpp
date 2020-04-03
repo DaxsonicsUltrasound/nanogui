@@ -76,26 +76,6 @@ static bool glad_initialized = false;
 static float get_pixel_ratio(GLFWwindow *window) {
 #if defined(EMSCRIPTEN)
     return emscripten_get_device_pixel_ratio();
-#elif defined(_WIN32)
-    HWND hwnd = glfwGetWin32Window(window);
-    HMONITOR monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
-    /* The following function only exists on Windows 8.1+, but we don't want to make that a dependency */
-    static HRESULT (WINAPI *GetDpiForMonitor_)(HMONITOR, UINT, UINT*, UINT*) = nullptr;
-    static bool GetDpiForMonitor_tried = false;
-
-    if (!GetDpiForMonitor_tried) {
-        auto shcore = LoadLibrary(TEXT("shcore"));
-        if (shcore)
-            GetDpiForMonitor_ = (decltype(GetDpiForMonitor_)) GetProcAddress(shcore, "GetDpiForMonitor");
-        GetDpiForMonitor_tried = true;
-    }
-
-    if (GetDpiForMonitor_) {
-        uint32_t dpi_x, dpi_y;
-        if (GetDpiForMonitor_(monitor, 0 /* effective DPI */, &dpi_x, &dpi_y) == S_OK)
-            return dpi_x / 96.0;
-    }
-    return 1.f;
 #elif defined(__linux__)
     (void) window;
 
@@ -585,51 +565,58 @@ void Screen::clear() {
 #endif
 }
 
+void Screen::draw_setup() {
+#if defined(NANOGUI_USE_OPENGL) || defined(NANOGUI_USE_GLES)
+    glfwMakeContextCurrent(m_glfw_window);
+#elif defined(NANOGUI_USE_METAL)
+    void *nswin = glfwGetCocoaWindow(m_glfw_window);
+    metal_window_set_size(nswin, m_fbsize);
+    m_metal_drawable = metal_window_next_drawable(nswin);
+    m_metal_texture = metal_drawable_texture(m_metal_drawable);
+    mnvgSetColorTexture(m_nvg_context, m_metal_texture);
+#endif
+
+#if !defined(EMSCRIPTEN)
+    glfwGetFramebufferSize(m_glfw_window, &m_fbsize[0], &m_fbsize[1]);
+    glfwGetWindowSize(m_glfw_window, &m_size[0], &m_size[1]);
+#else
+    emscripten_get_canvas_element_size("#canvas", &m_size[0], &m_size[1]);
+    m_fbsize = m_size;
+#endif
+
+#if defined(_WIN32) || defined(__linux__) || defined(EMSCRIPTEN)
+    m_fbsize = m_size;
+    m_size = Vector2i(Vector2f(m_size) / m_pixel_ratio);
+#else
+    /* Recompute pixel ratio on OSX */
+    if (m_size[0])
+        m_pixel_ratio = (float) m_fbsize[0] / (float) m_size[0];
+#endif
+
+#if defined(NANOGUI_USE_OPENGL) || defined(NANOGUI_USE_GLES)
+    CHK(glViewport(0, 0, m_fbsize[0], m_fbsize[1]));
+#endif
+}
+
+void Screen::draw_teardown() {
+#if defined(NANOGUI_USE_OPENGL) || defined(NANOGUI_USE_GLES)
+    glfwSwapBuffers(m_glfw_window);
+#elif defined(NANOGUI_USE_METAL)
+    mnvgSetColorTexture(m_nvg_context, nullptr);
+    metal_present_and_release_drawable(m_metal_drawable);
+    m_metal_texture = nullptr;
+    m_metal_drawable = nullptr;
+#endif
+}
+
 void Screen::draw_all() {
     if (m_redraw) {
         m_redraw = false;
 
-#if defined(NANOGUI_USE_OPENGL) || defined(NANOGUI_USE_GLES)
-        glfwMakeContextCurrent(m_glfw_window);
-#elif defined(NANOGUI_USE_METAL)
-        void *nswin = glfwGetCocoaWindow(m_glfw_window);
-        metal_window_set_size(nswin, m_fbsize);
-        void *drawable = metal_window_next_drawable(nswin);
-        m_metal_texture = metal_drawable_texture(drawable);
-        mnvgSetColorTexture(m_nvg_context, m_metal_texture);
-#endif
-
-#if !defined(EMSCRIPTEN)
-        glfwGetFramebufferSize(m_glfw_window, &m_fbsize[0], &m_fbsize[1]);
-        glfwGetWindowSize(m_glfw_window, &m_size[0], &m_size[1]);
-#else
-        emscripten_get_canvas_element_size("#canvas", &m_size[0], &m_size[1]);
-        m_fbsize = m_size;
-#endif
-
-#if defined(_WIN32) || defined(__linux__) || defined(EMSCRIPTEN)
-        m_fbsize = m_size;
-        m_size = Vector2i(Vector2f(m_size) / m_pixel_ratio);
-#else
-        /* Recompute pixel ratio on OSX */
-        if (m_size[0])
-            m_pixel_ratio = (float) m_fbsize[0] / (float) m_size[0];
-#endif
-
-#if defined(NANOGUI_USE_OPENGL) || defined(NANOGUI_USE_GLES)
-        CHK(glViewport(0, 0, m_fbsize[0], m_fbsize[1]));
-#endif
-
+        draw_setup();
         draw_contents();
         draw_widgets();
-
-#if defined(NANOGUI_USE_OPENGL) || defined(NANOGUI_USE_GLES)
-        glfwSwapBuffers(m_glfw_window);
-#elif defined(NANOGUI_USE_METAL)
-        mnvgSetColorTexture(m_nvg_context, nullptr);
-        metal_present_and_release_drawable(drawable);
-        m_metal_texture = nullptr;
-#endif
+        draw_teardown();
     }
 }
 
