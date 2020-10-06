@@ -187,7 +187,7 @@ Screen::Screen(const Vector2i &size, const std::string &caption, bool resizable,
 #  error Did not select a graphics API!
 #endif
 
-    int color_bits = 8, depth_bits = 0, stencil_bits = 0;
+    int color_bits = 10, alpha_bits = 2, depth_bits = 0, stencil_bits = 0;
 
     if (stencil_buffer && !depth_buffer)
         throw std::runtime_error(
@@ -198,13 +198,15 @@ Screen::Screen(const Vector2i &size, const std::string &caption, bool resizable,
         depth_bits = 24;
         stencil_bits = 8;
     }
-    if (m_float_buffer)
+    if (m_float_buffer) {
         color_bits = 16;
+        alpha_bits = 16;
+    }
 
     glfwWindowHint(GLFW_RED_BITS, color_bits);
     glfwWindowHint(GLFW_GREEN_BITS, color_bits);
     glfwWindowHint(GLFW_BLUE_BITS, color_bits);
-    glfwWindowHint(GLFW_ALPHA_BITS, color_bits);
+    glfwWindowHint(GLFW_ALPHA_BITS, alpha_bits);
     glfwWindowHint(GLFW_STENCIL_BITS, stencil_bits);
     glfwWindowHint(GLFW_DEPTH_BITS, depth_bits);
 
@@ -504,6 +506,20 @@ void Screen::initialize(GLFWwindow *window, bool shutdown_glfw) {
     /// Fixes retina display-related font rendering issue (#185)
     nvgBeginFrame(m_nvg_context, m_size[0], m_size[1], m_pixel_ratio);
     nvgEndFrame(m_nvg_context);
+
+    GLint red_size, green_size, blue_size, alpha_size;
+
+    glGetFramebufferAttachmentParameteriv(GL_FRAMEBUFFER, GL_BACK_LEFT, GL_FRAMEBUFFER_ATTACHMENT_RED_SIZE, &red_size);
+    glGetFramebufferAttachmentParameteriv(GL_FRAMEBUFFER, GL_BACK_LEFT, GL_FRAMEBUFFER_ATTACHMENT_GREEN_SIZE, &green_size);
+    glGetFramebufferAttachmentParameteriv(GL_FRAMEBUFFER, GL_BACK_LEFT, GL_FRAMEBUFFER_ATTACHMENT_BLUE_SIZE, &blue_size);
+    glGetFramebufferAttachmentParameteriv(GL_FRAMEBUFFER, GL_BACK_LEFT, GL_FRAMEBUFFER_ATTACHMENT_ALPHA_SIZE, &alpha_size);
+    printf("Back buffer format: RGBA%i%i%i%i\n", red_size, green_size, blue_size, alpha_size);
+
+    glGetFramebufferAttachmentParameteriv(GL_FRAMEBUFFER, GL_FRONT_LEFT, GL_FRAMEBUFFER_ATTACHMENT_RED_SIZE, &red_size);
+    glGetFramebufferAttachmentParameteriv(GL_FRAMEBUFFER, GL_FRONT_LEFT, GL_FRAMEBUFFER_ATTACHMENT_GREEN_SIZE, &green_size);
+    glGetFramebufferAttachmentParameteriv(GL_FRAMEBUFFER, GL_FRONT_LEFT, GL_FRAMEBUFFER_ATTACHMENT_BLUE_SIZE, &blue_size);
+    glGetFramebufferAttachmentParameteriv(GL_FRAMEBUFFER, GL_FRONT_LEFT, GL_FRAMEBUFFER_ATTACHMENT_ALPHA_SIZE, &alpha_size);
+    printf("Front buffer format: RGBA%i%i%i%i\n", red_size, green_size, blue_size, alpha_size);
 }
 
 Screen::~Screen() {
@@ -977,7 +993,7 @@ Texture::ComponentFormat Screen::component_format() const {
     if (m_float_buffer)
         return Texture::ComponentFormat::Float16;
     else
-        return Texture::ComponentFormat::UInt8;
+        return Texture::ComponentFormat::UInt16;
 }
 
 #if defined(NANOGUI_USE_METAL)
