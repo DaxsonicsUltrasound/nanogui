@@ -96,6 +96,7 @@ void metal_window_init(void *nswin_, bool float_buffer) {
     layer.device = (__bridge id<MTLDevice>) s_metal_device;
     layer.colorspace = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
     layer.contentsScale = nswin.backingScaleFactor;
+    layer.wantsExtendedDynamicRangeContent = float_buffer ? YES : NO;
     layer.pixelFormat = float_buffer ? MTLPixelFormatRGBA16Float : MTLPixelFormatBGRA8Unorm;
     layer.displaySyncEnabled = NO;
     layer.allowsNextDrawableTimeout = NO;
