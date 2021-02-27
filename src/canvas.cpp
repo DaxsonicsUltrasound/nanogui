@@ -44,7 +44,7 @@ Canvas::Canvas(Widget *parent, uint8_t samples,
     Object *color_texture = nullptr,
            *depth_texture = nullptr;
 
-    if (has_stencil_buffer && !has_stencil_buffer)
+    if (has_stencil_buffer && !has_depth_buffer)
         throw std::runtime_error("Canvas::Canvas(): has_stencil implies has_depth!");
 
     if (!m_render_to_texture) {
@@ -149,8 +149,8 @@ void Canvas::draw(NVGcontext *ctx) {
     if (m_draw_border)
         offset += Vector2i(1, 1);
 
-    fbsize = Vector2i(fbsize * pixel_ratio);
-    offset = Vector2i(offset * pixel_ratio);
+    fbsize = Vector2i(Vector2f(fbsize) * pixel_ratio);
+    offset = Vector2i(Vector2f(offset) * pixel_ratio);
 
     if (m_render_to_texture) {
         m_render_pass->resize(fbsize);
